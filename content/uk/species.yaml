@@ -1,0 +1,99 @@
+# 16 species from the GDD (block 2). Each species can be chosen by one member only.
+# slug = folder name in assets/images/<slug>/ — do not change it after launch.
+species:
+  - slug: fox
+    name: Лисеня
+    emoji: 🦊
+    character: допитливе, грайливе
+    favorite_place: Стежка світлячків
+    trait: знаходить таємні стежки
+  - slug: dragon
+    name: Дракончик
+    emoji: 🐉
+    character: сміливий, теплий
+    favorite_place: Гарячі джерела
+    trait: зігріває друзів
+  - slug: moon_deer
+    name: Місячний олень
+    emoji: 🦌
+    character: спокійний, мрійливий
+    favorite_place: Місячна галявина
+    trait: його роги світяться вночі
+  - slug: owl
+    name: Мудра сова
+    emoji: 🦉
+    character: вдумлива, спостережлива
+    favorite_place: Старий дуб
+    trait: ділиться думкою дня
+  - slug: unicorn
+    name: Єдиноріг
+    emoji: 🦄
+    character: ніжний, цілющий
+    favorite_place: Райдужний водоспад
+    trait: дарує благословення
+  - slug: otter
+    name: Водяна видра
+    emoji: 🦦
+    character: весела, товариська
+    favorite_place: Кришталеве озеро
+    trait: приносить знахідки з води
+  - slug: bear
+    name: Ведмежатко
+    emoji: 🐻
+    character: затишне, турботливе
+    favorite_place: Медовий гай
+    trait: обіймає тих, хто повернувся
+  - slug: rabbit
+    name: Чарівний кролик
+    emoji: 🐰
+    character: легкий, швидкий
+    favorite_place: Конюшинова галявина
+    trait: приносить удачу
+  - slug: hedgehog
+    name: Їжачок
+    emoji: 🦔
+    character: бережливий, затишний
+    favorite_place: Грибна галявина
+    trait: приносить друзям яблука й гриби
+  - slug: squirrel
+    name: Білочка
+    emoji: 🐿
+    character: метушлива, щедра
+    favorite_place: Горіхові верхів'я
+    trait: ховає скарби й ділиться ними
+  - slug: turtle
+    name: Черепаха
+    emoji: 🐢
+    character: мудра, неспішна
+    favorite_place: Тихий ставок
+    trait: нагадує не поспішати
+  - slug: firefly_fairy
+    name: Світлячок-фея
+    emoji: ✨
+    character: крихітна, сяйлива
+    favorite_place: Нічні папороті
+    trait: освітлює шлях у темряві
+  - slug: swan
+    name: Лебідь
+    emoji: 🦢
+    character: граційний, ніжний
+    favorite_place: Лілейна заводь
+    trait: співає на світанку
+  - slug: phoenix
+    name: Фенікс
+    emoji: 🔥
+    character: полум'яний, незламний
+    favorite_place: Сонячна скеля
+    trait: після сну відроджується ще яскравішим
+  - slug: herb_frog
+    name: Жабка-травниця
+    emoji: 🐸
+    character: весела, знахарка
+    favorite_place: Трав'яне болітце
+    trait: знає цілющі трави
+  - slug: forest_cat
+    name: Кіт-лісовик
+    emoji: 🐈
+    character: незалежний, таємничий
+    favorite_place: Мохова хатинка
+    trait: муркоче казки перед сном

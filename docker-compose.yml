@@ -1,0 +1,88 @@
+# Enchanted Companions — production stack for a single Ubuntu server (shared with Galene).
+#
+# * No container publishes a port: the bot uses Telegram long polling (outgoing HTTPS only),
+#   PostgreSQL is reachable only on the internal "backend" network. Galene's ports are untouched.
+# * Memory/CPU limits keep video conferencing (Galene) responsive.
+# * Data lives in ./data (database + backups), logs in ./logs.
+
+name: enchanted-companions
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-enchanted}
+      POSTGRES_USER: ${POSTGRES_USER:-ec}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      TZ: Europe/Kyiv
+    volumes:
+      - ./data/pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *logging
+
+  bot:
+    build: .
+    image: enchanted-companions:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ec}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-enchanted}
+      TZ: Europe/Kyiv
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./assets:/app/assets:ro
+      - ./config:/app/config:ro
+      - ./content:/app/content:ro
+      - ./logs:/app/logs
+    networks: [backend, egress]
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *logging
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-enchanted}
+      PGUSER: ${POSTGRES_USER:-ec}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_TIME: ${BACKUP_TIME:-03:30}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      TZ: Europe/Kyiv
+    volumes:
+      - ./data/backups:/backups
+      - ./deploy/backup.sh:/backup.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
+    logging: *logging
+
+networks:
+  backend:
+    internal: true   # no internet access, no host ports
+  egress: {}         # outgoing HTTPS to api.telegram.org for the bot only

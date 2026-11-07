@@ -1,0 +1,33 @@
+# Small sample in the same format as the real content/uk/affirmations.yaml
+templates:
+  affirmation: |
+    🌟 <b>Афірмація дня</b>
+
+    {text}
+    {closing}
+  law: |
+    📜 <b>Закон дня: {name}</b>
+
+    {essence}
+    {quote_block}{practice_block}
+  quote_block: "\n💬 <i>«{quote}»</i>\n"
+  practice_block: "\n✨ <b>У житті:</b> {practice}\n"
+
+affirmations:
+  - id: aff-001
+    theme: подяка
+    text: "Я дякую Творцеві за світло, що веде мене <завжди>."
+  - id: aff-002
+    theme: я-є
+    text: "Я є любов, Я є світло, Я є Душа."
+    closing: "Так є."
+
+laws:
+  - id: law-020
+    name: "Закон порожнечі"
+    essence: "Будь-яка порожнеча прагне бути заповненою."
+    practice: "Подякуйте минулому і відпустіть його."
+  - id: law-029
+    name: "Закон таксі"
+    essence: "Всесвіт — це таксі, а ми пасажири."
+    quote: "Нехай буде на вище благо."

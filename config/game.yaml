@@ -1,0 +1,64 @@
+# Enchanted Companions — game balance and schedule.
+# Every number of the game lives here. Edit, then restart the bot:
+#   docker compose restart bot
+# Times are local to `timezone`.
+
+timezone: Europe/Kyiv
+
+morning:
+  window_start: "05:00"        # greetings count from this time ...
+  window_end: "12:00"          # ... up to (not including) this time
+  card_time: "07:00"           # morning postcard from the Forest Spirit
+  summary_time: "12:30"        # one summary message, no list of absentees
+  energy: 10                   # once per day
+  mode: greeting_only          # greeting_only | any_message
+  counted_reaction: "🥰"       # reaction under a counted greeting message
+  invite_reaction: "🕊"        # reaction when an unregistered member can't be messaged privately
+  card_scene: heart            # assets/images/locations/<scene>.(jpg|png)
+  greeting_patterns:           # regular expressions, matched case-insensitively
+    - "добр(ого|ий|е|ім)\\s+ран(ку|ок|очку)"
+    - "з\\s+добрим\\s+ранком"
+    - "доброго\\s+ранку"
+    - "ранку\\s*!"
+    - "добр(ое|ого|ым)\\s+утр(о|а|ом|ечко)"
+    - "с\\s+добрым\\s+утром"
+    - "\\bgood\\s+morning\\b"
+    - "^\\s*morning\\b"
+    - "\\bguten\\s+morgen\\b"
+
+levels:
+  # total energy needed for level 1..10 (GDD, block 11)
+  thresholds: [0, 150, 400, 750, 1200, 1800, 2500, 3300, 4200, 5200]
+  # first level of each evolution stage: Baby, Young, Adult, Legendary guardian
+  stage_starts: [1, 4, 7, 10]
+
+sleep:
+  dozing_after_days: 2
+  sleeping_after_days: 4
+  dreaming_after_days: 8
+  reminder_after_days: 7       # one gentle private reminder, then silence
+  job_time: "00:05"
+
+classes:
+  live_energy: 30
+  recording_energy: 15
+  recording_valid_days: 7
+  announce_before_hours: [24, 1]
+  thanks_time: "21:00"         # evening thank-you post on the class day
+  max_failed_attempts: 5       # wrong codes before a pause
+  lockout_minutes: 10
+
+visits:
+  per_day: 1                   # successful visits per guest per day
+  host_energy: 20
+  guest_energy: 3
+  away_minutes: 60             # a pet that went visiting is "not at home" this long
+  oracle_owner_tg_id: 2116564097   # @omniyaskala — her pet's guests receive an affirmation
+  affirmations_file: content/uk/affirmations.yaml
+
+registration:
+  name_min_length: 2
+  name_max_length: 24
+
+community:
+  active_days: 7               # "active pets" on /world
