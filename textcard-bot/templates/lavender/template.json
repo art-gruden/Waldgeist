@@ -1,0 +1,29 @@
+{
+  "name": "Лавандові хмари",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 4,
+  "title": {
+    "font": "Lobster-Regular",
+    "uppercase": false,
+    "color": "#5b2d8c",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.25,
+    "glow_strength": 1.5,
+    "max_size": 0.111
+  },
+  "body": {
+    "font": "Comfortaa-Bold",
+    "color": "#47267a",
+    "accent_color": "#b0306e",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.28,
+    "glow_strength": 1.6,
+    "max_size": 0.064,
+    "line_spacing": 1.22
+  },
+  "footer": {
+    "font": "Comfortaa-Bold",
+    "color": "#5b2d8c"
+  }
+}

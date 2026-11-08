@@ -1,0 +1,28 @@
+{
+  "name": "Нічне небо",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 5,
+  "title": {
+    "font": "Oswald-SemiBold",
+    "color": "#eef1ff",
+    "glow_color": "#6f86ff",
+    "glow_radius": 0.3,
+    "glow_strength": 1.1,
+    "max_size": 0.093
+  },
+  "body": {
+    "font": "PlayfairDisplay-Bold",
+    "color": "#ffffff",
+    "accent_color": "#b9c6ff",
+    "glow_color": "#4f5fd0",
+    "glow_radius": 0.3,
+    "glow_strength": 0.9,
+    "max_size": 0.068,
+    "line_spacing": 1.18
+  },
+  "footer": {
+    "font": "Oswald-SemiBold",
+    "color": "#c9d2ff"
+  }
+}

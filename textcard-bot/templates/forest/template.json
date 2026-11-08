@@ -1,0 +1,32 @@
+{
+  "name": "Сонце в лісі",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 6,
+  "focus": [
+    0.4,
+    0.4
+  ],
+  "title": {
+    "font": "MarckScript-Regular",
+    "uppercase": false,
+    "color": "#fff8d6",
+    "glow_color": "#0e3320",
+    "glow_radius": 0.3,
+    "glow_strength": 1.3,
+    "max_size": 0.119
+  },
+  "body": {
+    "font": "PTSerif-Bold",
+    "color": "#fffbea",
+    "accent_color": "#f4e27a",
+    "glow_color": "#0b2e1f",
+    "glow_radius": 0.32,
+    "glow_strength": 1.4,
+    "max_size": 0.068
+  },
+  "footer": {
+    "font": "PTSerif-Bold",
+    "color": "#fff8d6"
+  }
+}

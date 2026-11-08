@@ -1,0 +1,6 @@
+data/
+tests/
+.env
+**/__pycache__
+*.zip
+.git

@@ -1,0 +1,31 @@
+{
+  "name": "Морські промені",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 3,
+  "focus": [
+    0.5,
+    0.3
+  ],
+  "title": {
+    "font": "RobotoCondensed-Bold",
+    "color": "#ffffff",
+    "glow_color": "#06324f",
+    "glow_radius": 0.28,
+    "glow_strength": 1.2,
+    "max_size": 0.093
+  },
+  "body": {
+    "font": "PTSansNarrow-Bold",
+    "color": "#ffffff",
+    "accent_color": "#bff4ff",
+    "glow_color": "#06324f",
+    "glow_radius": 0.3,
+    "glow_strength": 1.3,
+    "max_size": 0.076
+  },
+  "footer": {
+    "font": "RobotoCondensed-Bold",
+    "color": "#e6fbff"
+  }
+}

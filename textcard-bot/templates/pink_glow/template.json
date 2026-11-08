@@ -1,0 +1,45 @@
+{
+  "name": "Рожеве сяйво",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 1,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "box": [
+    0.05,
+    0.07,
+    0.95,
+    0.93
+  ],
+  "title": {
+    "font": "PTSansNarrow-Bold",
+    "color": [
+      "#a3124f",
+      "#6c0a35"
+    ],
+    "glow_color": "#ffffff",
+    "glow_radius": 0.25,
+    "glow_strength": 2.2,
+    "max_size": 0.111,
+    "gap": 0.35
+  },
+  "body": {
+    "font": "PTSerif-Bold",
+    "color": "#7a0f40",
+    "accent_color": "#4a1670",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.3,
+    "glow_strength": 2.2,
+    "condense": 0.86,
+    "max_size": 0.072,
+    "line_spacing": 1.1
+  },
+  "footer": {
+    "font": "PTSansNarrow-Bold",
+    "color": "#7a0f40",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.3
+  }
+}

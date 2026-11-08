@@ -1,0 +1,21 @@
+services:
+  bot:
+    build: .
+    image: docker.io/artgruden/energy-card-bot:1.0.0
+    env_file: .env
+    volumes:
+      - bot-data:/data          # SQLite з налаштуваннями + додані шаблони
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+volumes:
+  bot-data:

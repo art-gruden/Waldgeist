@@ -1,0 +1,40 @@
+{
+  "name": "Золоте боке",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 7,
+  "title": {
+    "font": "PlayfairDisplay-Bold",
+    "color": [
+      "#fff3cf",
+      "#d9a441"
+    ],
+    "glow_color": "#000000",
+    "glow_radius": 0.25,
+    "glow_strength": 0.8,
+    "max_size": 0.085
+  },
+  "body": {
+    "font": "PlayfairDisplay-Bold",
+    "color": [
+      "#fff6dc",
+      "#e6b65a"
+    ],
+    "accent_color": "#ffd77a",
+    "shadow_color": "#000000cc",
+    "shadow_offset": [
+      0.02,
+      0.04
+    ],
+    "shadow_blur": 0.06,
+    "glow_color": "#2a1500",
+    "glow_radius": 0.3,
+    "glow_strength": 0.8,
+    "max_size": 0.068,
+    "line_spacing": 1.18
+  },
+  "footer": {
+    "font": "PlayfairDisplay-Bold",
+    "color": "#e6b65a"
+  }
+}

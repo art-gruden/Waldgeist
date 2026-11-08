@@ -1,0 +1,32 @@
+{
+  "name": "Старий папір",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 8,
+  "box": [
+    0.1,
+    0.1,
+    0.9,
+    0.9
+  ],
+  "overlay": {
+    "vignette": 0.0
+  },
+  "title": {
+    "font": "MarckScript-Regular",
+    "uppercase": false,
+    "color": "#8a2f1f",
+    "max_size": 0.111
+  },
+  "body": {
+    "font": "PlayfairDisplay-Bold",
+    "color": "#3b2a1e",
+    "accent_color": "#8a2f1f",
+    "max_size": 0.064,
+    "line_spacing": 1.25
+  },
+  "footer": {
+    "font": "PTSerif-Regular",
+    "color": "#6b5442"
+  }
+}

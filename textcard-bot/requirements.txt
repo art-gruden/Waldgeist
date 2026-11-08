@@ -1,0 +1,2 @@
+python-telegram-bot>=22.0,<23
+pillow>=10.3
