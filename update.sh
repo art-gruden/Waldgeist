@@ -20,4 +20,7 @@ echo "$before -> $after"
 echo "==> rebuild and restart"
 docker compose build --pull
 docker compose up -d --remove-orphans
+# config/, content/ and assets/ are mounted into the container: restart so the bot
+# re-reads texts, affirmations and images even when the image itself did not change
+docker compose restart bot
 docker compose ps
