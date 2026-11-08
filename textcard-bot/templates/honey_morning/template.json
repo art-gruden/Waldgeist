@@ -1,0 +1,36 @@
+{
+  "name": "Медовий ранок",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 13,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "title": {
+    "font": "MarckScript-Regular",
+    "color": "#4a2105",
+    "glow_color": "#fff3c4",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "uppercase": false,
+    "max_size": 0.125
+  },
+  "body": {
+    "font": "PTSerif-Bold",
+    "color": "#4a2105",
+    "glow_color": "#fff3c4",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "accent_color": "#a3124f",
+    "max_size": 0.07,
+    "line_spacing": 1.12
+  },
+  "footer": {
+    "font": "PTSerif-Bold",
+    "color": "#4a2105",
+    "glow_color": "#fff3c4",
+    "glow_radius": 0.3,
+    "glow_strength": 1.5
+  }
+}

@@ -21,6 +21,7 @@ class FakeTelegram:
         self.calls: list[dict] = []          # усі виклики бота: {"method", "params", "files", "result"}
         self.files: dict[str, bytes] = {}
         self.messages: dict[tuple[int, int], dict] = {}
+        self.channels: dict[int, dict] = {}   # id → {"title", "username", "type", "bot": status, "bot_post": bool, "admins": set}
         self._uid = itertools.count(1)
         self._mid = itertools.count(1000)
         self._fid = itertools.count(1)
@@ -58,6 +59,8 @@ class FakeTelegram:
                 result = self._handle(method, params, files)
             except KeyError as e:
                 return JSONResponse({"ok": False, "error_code": 400, "description": f"Bad Request: {e}"}, 400)
+            except PermissionError as e:
+                return JSONResponse({"ok": False, "error_code": 403, "description": f"Forbidden: {e}"}, 403)
             with self.lock:
                 self.calls.append({"method": method, "params": params, "files": files, "result": result})
             return JSONResponse({"ok": True, "result": result})
@@ -98,10 +101,44 @@ class FakeTelegram:
     # ---------------- методи
     def _msg(self, chat_id: int, extra: dict) -> dict:
         mid = next(self._mid)
-        m = {"message_id": mid, "date": int(time.time()), "chat": {"id": int(chat_id), "type": "private"},
-             "from": BOT_USER, **extra}
+        ch = self.channels.get(int(chat_id))
+        chat = ({"id": int(chat_id), "type": ch["type"], "title": ch["title"],
+                 **({"username": ch["username"]} if ch["username"] else {})}
+                if ch else {"id": int(chat_id), "type": "private"})
+        m = {"message_id": mid, "date": int(time.time()), "chat": chat, "from": BOT_USER, **extra}
         self.messages[(int(chat_id), mid)] = m
         return m
+
+    # ---------------- канали й групи
+    def add_channel(self, cid: int, title: str, username: str = "", ctype: str = "channel", bot: str = "administrator",
+                    bot_post: bool = True, admins=()):
+        self.channels[cid] = {"title": title, "username": username, "type": ctype, "bot": bot, "bot_post": bot_post,
+                              "admins": set(admins)}
+
+    def _find_channel(self, ref) -> tuple[int, dict]:
+        for cid, ch in self.channels.items():
+            if str(ref) == str(cid) or (isinstance(ref, str) and ref.startswith("@") and ch["username"]
+                                        and ref[1:].lower() == ch["username"].lower()):
+                return cid, ch
+        raise KeyError("chat not found")
+
+    def _member(self, cid: int, ch: dict, uid: int) -> dict:
+        user = BOT_USER if uid == BOT_USER["id"] else self._user(uid, "Тест")
+        if uid == BOT_USER["id"]:
+            status, post = ch["bot"], ch["bot_post"]
+        else:
+            status, post = ("administrator" if uid in ch["admins"] else "member"), True
+        if status == "administrator":
+            return {"status": "administrator", "user": user, "can_be_edited": False, "is_anonymous": False,
+                    "can_manage_chat": True, "can_delete_messages": True, "can_manage_video_chats": True,
+                    "can_restrict_members": True, "can_promote_members": False, "can_change_info": True,
+                    "can_invite_users": True, "can_post_stories": False, "can_edit_stories": False,
+                    "can_delete_stories": False, **({"can_post_messages": True} if post else {"can_post_messages": False})}
+        if status == "creator":
+            return {"status": "creator", "user": user, "is_anonymous": False}
+        if status == "left":
+            return {"status": "left", "user": user}
+        return {"status": "member", "user": user}
 
     def _file(self, data: bytes) -> str:
         fid = f"F{next(self._fid)}"
@@ -131,14 +168,30 @@ class FakeTelegram:
         if method == "deleteMessage":
             self.messages.pop((int(chat), int(p["message_id"])), None)
             return True
-        if method == "sendPhoto":
-            name, data = files["photo"]
-            fid = self._file(data)
-            return self._msg(chat, {"photo": [{"file_id": fid, "file_unique_id": "u" + fid, "width": 90, "height": 90}],
-                                    **({"caption": p["caption"]} if p.get("caption") else {}), **rm})
-        if method == "sendDocument":
-            name, data = files["document"]
-            fid = self._file(data)
+        if method == "getChat":
+            cid, ch = self._find_channel(p["chat_id"])
+            # справжній getChat повертає ChatFullInfo: accent_color_id і max_reaction_count є завжди
+            return {"id": cid, "type": ch["type"], "title": ch["title"], "accent_color_id": 0, "max_reaction_count": 11,
+                    **({"username": ch["username"]} if ch["username"] else {})}
+        if method == "getChatMember":
+            cid, ch = self._find_channel(p["chat_id"])
+            return self._member(cid, ch, int(p["user_id"]))
+        if method in ("sendPhoto", "sendDocument"):
+            key = "photo" if method == "sendPhoto" else "document"
+            if key in files:
+                name, data = files[key]
+                fid = self._file(data)
+            else:                       # повторне надсилання за file_id
+                fid, name = p[key], "reused"
+                if fid not in self.files:
+                    raise KeyError("wrong file identifier")
+            if int(chat) in self.channels:
+                ch = self.channels[int(chat)]
+                if ch["bot"] != "administrator" or (ch["type"] == "channel" and not ch["bot_post"]):
+                    raise PermissionError("bot is not allowed to post")
+            if key == "photo":
+                return self._msg(chat, {"photo": [{"file_id": fid, "file_unique_id": "u" + fid, "width": 90, "height": 90}],
+                                        **({"caption": p["caption"]} if p.get("caption") else {}), **rm})
             return self._msg(chat, {"document": {"file_id": fid, "file_unique_id": "u" + fid, "file_name": name},
                                     **({"caption": p["caption"]} if p.get("caption") else {}), **rm})
         if method == "sendMediaGroup":
@@ -168,6 +221,27 @@ class FakeTelegram:
                "from": self._user(uid, name), "text": text}
         if text.startswith("/"):
             msg["entities"] = [{"type": "bot_command", "offset": 0, "length": len(text.split()[0])}]
+        self.push({"message": msg})
+
+    def forward_from_channel(self, uid: int, cid: int, text: str = "пост із каналу", name: str = "Тест", photo: bool = False):
+        """Користувач пересилає боту пост із каналу cid (текстовий або з картинкою)."""
+        ch = self.channels.get(cid, {"title": "?", "username": ""})
+        msg = {"message_id": next(self._mid), "date": int(time.time()), "chat": {"id": uid, "type": "private", "first_name": name},
+               "from": self._user(uid, name),
+               "forward_origin": {"type": "channel", "date": int(time.time()), "message_id": 5,
+                                  "chat": {"id": cid, "type": "channel", "title": ch["title"],
+                                           **({"username": ch["username"]} if ch["username"] else {})}}}
+        if photo:
+            fid = self._file(b"fake-photo")
+            msg["photo"] = [{"file_id": fid, "file_unique_id": "u" + fid, "width": 100, "height": 100, "file_size": 10}]
+        else:
+            msg["text"] = text
+        self.push({"message": msg})
+
+    def forward_from_user(self, uid: int, text: str = "привіт", name: str = "Тест"):
+        msg = {"message_id": next(self._mid), "date": int(time.time()), "chat": {"id": uid, "type": "private", "first_name": name},
+               "from": self._user(uid, name), "text": text,
+               "forward_origin": {"type": "user", "date": int(time.time()), "sender_user": self._user(777, "Хтось")}}
         self.push({"message": msg})
 
     def send_photo(self, uid: int, data: bytes, as_document=False, mime="image/jpeg", name="Тест"):

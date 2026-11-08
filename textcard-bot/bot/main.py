@@ -9,13 +9,14 @@ import html
 import io
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
 from telegram import (BotCommand, InlineKeyboardButton as Btn, InlineKeyboardMarkup, InputFile, InputMediaPhoto,
-                      Message, Update)
+                      LinkPreviewOptions, Message, MessageOriginChannel, Update)
 from telegram.constants import ChatAction, ParseMode
-from telegram.error import BadRequest, Forbidden
+from telegram.error import BadRequest, Forbidden, TelegramError
 from telegram.ext import (Application, ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes,
                           MessageHandler, filters)
 
@@ -77,9 +78,11 @@ HELP = (
     "• перший рядок, що починається з <code>#</code>, — заголовок лише для цієї листівки "
     "(<code>#</code> без тексту — без заголовка)\n"
     "• нові рядки зберігаються\n"
-    "• фото, надіслане боту, — новий шаблон (фон)\n\n"
+    "• фото, надіслане боту, — новий шаблон (фон)\n"
+    "• кнопка «📢 Опублікувати» під листівкою надсилає її у ваш Telegram-канал\n\n"
     "/menu — налаштування: шаблон, заголовок, підпис, розмір, шрифт, колір, як надсилати\n"
     "/templates — вибрати шаблон\n"
+    "/channel — підключити канал для публікацій\n"
     "/title <i>текст</i> — змінити заголовок\n"
     "/cancel — скасувати введення\n"
     "/id — ваш Telegram ID"
@@ -144,6 +147,122 @@ class CardBot:
         except KeyError:
             return False
         return t.custom and (self.is_admin(uid) or t.config.get("owner") == uid)
+
+    # ------------------------------------------------------------ канал для публікацій (в кожного користувача свій)
+
+    def channel(self, uid: int) -> dict | None:
+        return self.db.kv_get(f"channel:{uid}")
+
+    @staticmethod
+    def post_link(ch: dict, message_id: int) -> str | None:
+        if ch.get("username"):
+            return f"https://t.me/{ch['username']}/{message_id}"
+        cid = str(ch["id"])
+        return f"https://t.me/c/{cid[4:]}/{message_id}" if cid.startswith("-100") else None
+
+    @staticmethod
+    def parse_chat_ref(text: str) -> str | int | None:
+        """@username, t.me/username, https://t.me/username або числовий ID (-100…) → що передати в get_chat."""
+        t = text.strip()
+        if re.fullmatch(r"-?\d{5,}", t):
+            return int(t)
+        m = re.fullmatch(r"(?:https?://)?(?:t\.me|telegram\.me)/([A-Za-z][A-Za-z0-9_]{3,31})/?(?:\d+/?)?", t)
+        if m:
+            return "@" + m.group(1)
+        m = re.fullmatch(r"@?([A-Za-z][A-Za-z0-9_]{3,31})", t)
+        return "@" + m.group(1) if m else None
+
+    async def connect_channel(self, ctx, msg: Message, uid: int, ref: str | int) -> bool:
+        """Перевіряє канал і права (бота та користувача) і зберігає підключення. True — підключено."""
+        how = ("Як підключити:\n1) додайте бота адміністратором каналу з правом «Публікація повідомлень»;\n"
+               "2) перешліть мені будь-який пост із каналу або надішліть @username.\n/cancel — скасувати.")
+        try:
+            chat = await ctx.bot.get_chat(ref)
+        except TelegramError:
+            await msg.reply_text("⚠️ Не знаходжу такий канал (або бот його не бачить).\n\n" + how)
+            return False
+        if chat.type not in ("channel", "supergroup", "group"):
+            await msg.reply_text("⚠️ Це не канал і не група. Потрібен канал або група Telegram.\n\n" + how)
+            return False
+        try:
+            me = await ctx.bot.get_chat_member(chat.id, ctx.bot.id)
+        except TelegramError:
+            me = None
+        if not me or me.status not in ("administrator", "creator"):
+            await msg.reply_text(f"⚠️ Бот не є адміністратором «{chat.title}».\n\n" + how)
+            return False
+        if chat.type == "channel" and me.status == "administrator" and not getattr(me, "can_post_messages", False):
+            await msg.reply_text(f"⚠️ У бота в «{chat.title}» немає права «Публікація повідомлень». "
+                                 "Увімкніть його в правах адміністратора й надішліть канал ще раз.")
+            return False
+        try:
+            who = await ctx.bot.get_chat_member(chat.id, uid)
+        except TelegramError:
+            who = None
+        if not who or who.status not in ("administrator", "creator"):
+            await msg.reply_text(f"⚠️ Ви не адміністратор «{chat.title}», тож публікувати туди через бота не можна.")
+            return False
+        self.db.kv_set(f"channel:{uid}", {"id": chat.id, "title": chat.title or str(chat.id),
+                                          "username": chat.username or "", "type": chat.type})
+        self.db.set_state(uid, None)
+        await msg.reply_text(f"✅ Підключено: «{chat.title}». Тепер під кожною листівкою є кнопка "
+                             "«📢 Опублікувати в канал», а в меню — «Опублікувати останню».")
+        log.info("user %s підключив канал %s", uid, chat.id)
+        return True
+
+    async def on_channel_input(self, ctx, msg: Message, uid: int):
+        """Користувач у стані «підключення каналу»: чекаємо пересланий пост, @username, посилання або ID."""
+        origin = msg.forward_origin
+        if origin is not None:
+            if isinstance(origin, MessageOriginChannel):
+                await self.connect_channel(ctx, msg, uid, origin.chat.id)
+            else:
+                await msg.reply_text("Це переслано не з каналу. Перешліть пост саме з каналу або надішліть @username.")
+            return
+        ref = self.parse_chat_ref(msg.text or "") if msg.text else None
+        if ref is None:
+            await msg.reply_text("Надішліть @username каналу, посилання t.me/… або перешліть будь-який його пост. "
+                                 "/cancel — скасувати.")
+            return
+        await self.connect_channel(ctx, msg, uid, ref)
+
+    async def publish(self, q, ctx, uid: int, chat_id: int, mid: int, confirmed: bool = False):
+        """Надсилає листівку (повідомлення mid у чаті з ботом) у підключений канал."""
+        ch = self.channel(uid)
+        if not ch:
+            return await q.answer("Спершу підключіть канал: Меню → 📢 Канал", show_alert=True)
+        rec = self.db.get_render(chat_id, mid)
+        if not rec or not rec["file_id"]:
+            return await q.answer("Цю листівку вже не можна опублікувати — створіть її знову.", show_alert=True)
+        if rec["published_to"] == ch["id"] and not confirmed:   # уже в цьому каналі — спершу перепитуємо
+            await q.answer()
+            return await ctx.bot.send_message(
+                chat_id, f"Цю листівку вже опубліковано в «{esc(ch['title'])}». Опублікувати ще раз?",
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb([[("📢 Так, ще раз", f"p:yes:{mid}"), ("Ні", "x")]]))
+        try:
+            who = await ctx.bot.get_chat_member(ch["id"], uid)
+            if who.status not in ("administrator", "creator"):
+                return await q.answer("Ви більше не адміністратор цього каналу. Перепідключіть канал у меню.",
+                                      show_alert=True)
+            if rec["kind"] == "document":
+                sent = await ctx.bot.send_document(ch["id"], rec["file_id"])
+            else:
+                sent = await ctx.bot.send_photo(ch["id"], rec["file_id"])
+        except (Forbidden, BadRequest) as e:
+            log.warning("публікація користувача %s у %s не вдалася: %s", uid, ch["id"], e)
+            return await q.answer("Не вдалося опублікувати: бот більше не має доступу до каналу. "
+                                  "Перепідключіть канал у меню.", show_alert=True)
+        except TelegramError as e:
+            log.warning("публікація користувача %s у %s не вдалася: %s", uid, ch["id"], e)
+            return await q.answer("Не вдалося опублікувати, спробуйте ще раз.", show_alert=True)
+        self.db.mark_published(chat_id, mid, ch["id"])
+        await q.answer("✅ Опубліковано")
+        link = self.post_link(ch, sent.message_id)
+        await ctx.bot.send_message(
+            chat_id, f"✅ Опубліковано в «{esc(ch['title'])}»" + (f"\n{link}" if link else ""),
+            parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True))
+        log.info("user %s: листівка опублікована в %s", uid, ch["id"])
 
     async def gate(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Реєструє користувача й перевіряє доступ. Повертає id або None."""
@@ -239,7 +358,8 @@ class CardBot:
 
     def card_kb(self) -> InlineKeyboardMarkup:
         return kb([[("🔄 Інший шаблон", "r:next"), ("🖼 Вибрати", "r:pick")],
-                   [("📐 Розмір", "r:size"), ("📄 Файлом", "r:file")]])
+                   [("📐 Розмір", "r:size"), ("📄 Файлом", "r:file")],
+                   [("📢 Опублікувати в канал", "r:pub")]])
 
     async def send_card(self, ctx, chat_id: int, uid: int, text: str, title_override: str | None,
                         template_id: str | None = None, size: str | None = None, force_file: bool = False):
@@ -258,12 +378,16 @@ class CardBot:
             m = await ctx.bot.send_photo(chat_id, InputFile(io.BytesIO(photo), filename=f"card-{stamp}.jpg"),
                                          caption=caption, reply_markup=self.card_kb())
             self.db.add_render(chat_id, m.message_id, uid, text, title_override)
+            if m.photo:   # file_id потрібен, щоб кнопка «Опублікувати» надіслала в канал саме цю картинку
+                self.db.set_render_file(chat_id, m.message_id, "photo", m.photo[-1].file_id)
         if s["send_as"] in ("file", "both"):
             ext = "jpg" if s["format"] == "jpg" else "png"
             m = await ctx.bot.send_document(chat_id, InputFile(io.BytesIO(file), filename=f"card-{t.id}-{stamp}.{ext}"),
                                             caption=caption if s["send_as"] == "file" else None,
                                             reply_markup=self.card_kb() if s["send_as"] == "file" else None)
             self.db.add_render(chat_id, m.message_id, uid, text, title_override)
+            if s["send_as"] == "file" and m.document:   # у режимі «фото + файл» публікується фото (воно з кнопками)
+                self.db.set_render_file(chat_id, m.message_id, "document", m.document.file_id)
         log.info("user %s: картка %s %s", uid, t.id, size or s["size"])
 
     # ------------------------------------------------------------ екрани меню
@@ -280,6 +404,7 @@ class CardBot:
         if name == "main":
             t = self.template_or_default(uid)
             title = esc(s["title"]) if s["title_on"] else "<i>не показується</i>"
+            ch = self.channel(uid)
             fonts = []
             if s["font"]:
                 fonts.append(f"текст {esc(s['font'])}")
@@ -294,11 +419,13 @@ class CardBot:
                     f"🎨 Колір: {COLORS.get(s['color'], COLORS[''])[0]} · ✨ світіння: {'так' if s['glow'] else 'ні'}\n"
                     f"📤 Надсилати: {SEND_AS[s['send_as']]}"
                     + (f" ({s['format'].upper()})" if s["send_as"] != "photo" else "")
+                    + f"\n📢 Канал: {('<b>' + esc(ch['title']) + '</b>') if ch else '<i>не підключено</i>'}"
                     + "\n\nНадішліть текст (10–20 слів) — отримаєте листівку.")
             rows = [[("🖼 Шаблон", "m:tpl:0"), ("🏷 Заголовок", "m:title")],
                     [("✍️ Підпис", "m:footer"), ("📐 Розмір", "m:size")],
                     [("🔤 Шрифт", "m:font:body"), ("🎨 Колір", "m:color")],
                     [(f"✨ Світіння: {'так' if s['glow'] else 'ні'}", "s:glow"), ("📤 Надсилати", "m:send")],
+                    [("📢 Канал", "m:chan"), ("📢 Опублікувати останню", "p:last")],
                     [("🗂 Шаблони: додати / видалити", "m:tm")]]
             if self.is_admin(uid):
                 rows.append([("🛠 Адміністрування", "m:admin")])
@@ -376,6 +503,26 @@ class CardBot:
             return ("📤 <b>Як надсилати</b>\nФото Telegram стискає. Файл — без втрат, у вибраному форматі "
                     "(PNG — найкраща якість, JPEG — менший розмір)."), kb(rows)
 
+        if name == "chan":
+            ch = self.channel(uid)
+            if ch:
+                kind = "канал" if ch.get("type", "channel") == "channel" else "група"
+                at = f" · @{esc(ch['username'])}" if ch.get("username") else ""
+                text = (f"📢 <b>Публікація</b>\n\nПідключено ({kind}): <b>{esc(ch['title'])}</b>{at}\n\n"
+                        "Кнопка «📢 Опублікувати в канал» під листівкою надсилає саме цю картинку, а «Опублікувати "
+                        "останню» в меню — вашу останню листівку. Перед кожною публікацією перевіряю, що ви й бот "
+                        "досі адміністратори.")
+                rows = [[("📢 Опублікувати останню", "p:last")],
+                        [("🔄 Інший канал", "i:chan_connect"), ("🔌 Відключити", "c:off")], back]
+            else:
+                text = ("📢 <b>Публікація в канал</b>\n\nКанал не підключено.\n\n"
+                        "1) Додайте бота адміністратором свого каналу з правом «Публікація повідомлень».\n"
+                        "2) Натисніть «Підключити» і перешліть мені будь-який пост із каналу "
+                        "(або надішліть @username).\n\n"
+                        "Підключити можна лише канал, де адміністратор ви самі.")
+                rows = [[("➕ Підключити канал", "i:chan_connect")], back]
+            return text, kb(rows)
+
         if name == "tm":
             rows = []
             if self.can_add(uid):
@@ -438,7 +585,8 @@ class CardBot:
             rows = [btns[i:i + 2] for i in range(0, len(btns), 2)] + [[("✖️ Скасувати", "n:cancel")]]
             return ("🎨 <b>Стиль тексту</b> — як у якому шаблоні?\n"
                     "Для темного фото беріть шаблон зі світлим текстом (Нічне небо, Захід сонця, Морські промені), "
-                    "для світлого — з темним (Рожеве сяйво, Лавандові хмари, Старий папір)."), kb(rows)
+                    "для світлого — з темним (Рожеве сяйво, Лавандові хмари, Блакитне небо, Лимонне сонце, "
+                    "Старий папір)."), kb(rows)
 
         if name == "newov":
             rows = [[(v[0], f"n:ov:{k}")] for k, v in OVERLAYS.items()] + [[("✖️ Скасувати", "n:cancel")]]
@@ -487,6 +635,13 @@ class CardBot:
         else:
             await self.prompt(update.message, uid, "title")
 
+    async def cmd_channel(self, update: Update, ctx):
+        uid = await self.gate(update, ctx)
+        if uid is None:
+            return
+        text, markup = self.screen(uid, "chan")
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=markup)
+
     async def cmd_cancel(self, update: Update, ctx):
         uid = await self.gate(update, ctx)
         if uid is None:
@@ -508,6 +663,8 @@ class CardBot:
         "tpl_photo": "📷 Надішліть фото для нового шаблону — краще <b>файлом</b> (📎 → Файл), тоді Telegram його не стискає. "
                      "Мінімум 400×400 px. /cancel — скасувати.",
         "adduser": "✏️ Надішліть Telegram ID користувача (число). Свій ID людина бачить командою /id. /cancel — скасувати.",
+        "chan_connect": "📢 Перешліть мені будь-який пост зі свого каналу або надішліть @username каналу "
+                        "(бот має бути його адміністратором з правом «Публікація повідомлень»). /cancel — скасувати.",
     }
 
     async def prompt(self, msg: Message, uid: int, state: str, data: dict | None = None):
@@ -527,6 +684,8 @@ class CardBot:
         msg = update.message
         text = msg.text or ""
         state, data = self.db.state(uid)
+        if state == "chan_connect":
+            return await self.on_channel_input(ctx, msg, uid)
         if state == "title":
             return await self.set_title(msg, uid, text)
         if state == "footer":
@@ -580,6 +739,8 @@ class CardBot:
         if uid is None:
             return
         msg = update.message
+        if self.db.state(uid)[0] == "chan_connect":   # пересланий із каналу пост із картинкою
+            return await self.on_channel_input(ctx, msg, uid)
         if not self.can_add(uid):
             return await msg.reply_text("Додавати шаблони можуть лише адміністратори.")
         if msg.photo:
@@ -726,6 +887,29 @@ class CardBot:
                 return
             return await show("main")
 
+        if kind == "c":
+            if parts[1] == "off":
+                self.db.kv_del(f"channel:{uid}")
+                await q.answer("Канал відключено")
+                return await show("chan")
+            return await q.answer()
+
+        if kind == "p":
+            chat_id = q.message.chat_id
+            if parts[1] == "last":
+                last = self.db.last_publishable(uid)
+                if not last:
+                    return await q.answer("Ще немає листівки для публікації: спершу надішліть текст.", show_alert=True)
+                return await self.publish(q, ctx, uid, last["chat_id"], last["message_id"])
+            if parts[1] == "yes" and len(parts) > 2 and parts[2].isdigit():
+                await self.publish(q, ctx, uid, chat_id, int(parts[2]), confirmed=True)
+                try:
+                    await q.message.delete()   # запитання «ще раз?» більше не потрібне
+                except TelegramError:
+                    pass
+                return
+            return await q.answer()
+
         if kind == "ex":
             await q.answer("Готую приклади…")
             return await self.send_examples(ctx, q.message.chat_id, uid, int(parts[1]))
@@ -843,6 +1027,8 @@ class CardBot:
             if act == "file":
                 await q.answer("Надсилаю файлом…")
                 return await self.send_card(ctx, chat_id, uid, text, title, force_file=True)
+            if act == "pub":
+                return await self.publish(q, ctx, uid, chat_id, mid)
         if kind == "tr":
             tid = parts[1]
             try:
@@ -880,8 +1066,11 @@ class CardBot:
         await ctx.bot.send_message(chat_id, t, parse_mode=ParseMode.HTML, reply_markup=m)
 
     async def on_other(self, update: Update, ctx):
-        if await self.gate(update, ctx) is None:
+        uid = await self.gate(update, ctx)
+        if uid is None:
             return
+        if self.db.state(uid)[0] == "chan_connect":   # пересланий із каналу пост без тексту/картинки (відео тощо)
+            return await self.on_channel_input(ctx, update.message, uid)
         await update.message.reply_text("Надішліть текст для листівки або /help.")
 
     async def on_error(self, update: object, ctx: ContextTypes.DEFAULT_TYPE):
@@ -899,6 +1088,7 @@ async def _post_init(app: Application):
     await app.bot.set_my_commands([
         BotCommand("menu", "Налаштування"),
         BotCommand("templates", "Вибрати шаблон"),
+        BotCommand("channel", "Канал для публікацій"),
         BotCommand("title", "Змінити заголовок"),
         BotCommand("help", "Як користуватися"),
         BotCommand("cancel", "Скасувати введення"),
@@ -921,6 +1111,7 @@ def build_app(token: str, data_dir: Path = DATA_DIR, base_url: str | None = None
     app.add_handler(CommandHandler("help", cb.cmd_help, filters=private))
     app.add_handler(CommandHandler(["menu", "settings"], cb.cmd_menu, filters=private))
     app.add_handler(CommandHandler("templates", cb.cmd_templates, filters=private))
+    app.add_handler(CommandHandler("channel", cb.cmd_channel, filters=private))
     app.add_handler(CommandHandler("title", cb.cmd_title, filters=private))
     app.add_handler(CommandHandler("cancel", cb.cmd_cancel, filters=private))
     app.add_handler(CommandHandler("id", cb.cmd_id, filters=private))

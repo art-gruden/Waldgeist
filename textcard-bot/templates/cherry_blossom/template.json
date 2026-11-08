@@ -1,0 +1,39 @@
+{
+  "name": "Квітуча вишня",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 16,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "title": {
+    "font": "Lobster-Regular",
+    "color": [
+      "#a3124f",
+      "#6b0f3a"
+    ],
+    "glow_color": "#ffffff",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "uppercase": false,
+    "max_size": 0.115
+  },
+  "body": {
+    "font": "PlayfairDisplay-Bold",
+    "color": "#5b0f33",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "accent_color": "#1f7a4d",
+    "max_size": 0.066,
+    "line_spacing": 1.18
+  },
+  "footer": {
+    "font": "PlayfairDisplay-Bold",
+    "color": "#5b0f33",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.3,
+    "glow_strength": 1.5
+  }
+}

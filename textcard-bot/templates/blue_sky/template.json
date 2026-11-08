@@ -1,0 +1,35 @@
+{
+  "name": "Блакитне небо",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 17,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "title": {
+    "font": "RobotoCondensed-Bold",
+    "color": "#0b2a5b",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "max_size": 0.093
+  },
+  "body": {
+    "font": "PTSerif-Bold",
+    "color": "#0b2a5b",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "accent_color": "#c2410c",
+    "max_size": 0.07,
+    "line_spacing": 1.12
+  },
+  "footer": {
+    "font": "RobotoCondensed-Bold",
+    "color": "#0b2a5b",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.3,
+    "glow_strength": 1.5
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "Кораловий ранок",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 10,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "title": {
+    "font": "Lobster-Regular",
+    "color": [
+      "#7a0f3a",
+      "#4d0a26"
+    ],
+    "glow_color": "#fff1e6",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "uppercase": false,
+    "max_size": 0.115
+  },
+  "body": {
+    "font": "Comfortaa-Bold",
+    "color": "#5a0f2e",
+    "glow_color": "#fff1e6",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "accent_color": "#1d5fa8",
+    "max_size": 0.064,
+    "line_spacing": 1.2
+  },
+  "footer": {
+    "font": "Comfortaa-Bold",
+    "color": "#5a0f2e",
+    "glow_color": "#fff1e6",
+    "glow_radius": 0.3,
+    "glow_strength": 1.5
+  }
+}

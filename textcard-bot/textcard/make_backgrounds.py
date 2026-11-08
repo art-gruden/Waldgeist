@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Генерує фонові зображення для вбудованих шаблонів (без мережі, лише numpy + Pillow).
 
-    python3 tools/make_backgrounds.py            # усі фони -> templates/<id>/background.jpg
-    python3 tools/make_backgrounds.py pink_glow  # лише один
+    python3 textcard/make_backgrounds.py            # усі фони -> templates/<id>/background.jpg
+    python3 textcard/make_backgrounds.py pink_glow  # лише один
 
 Фони детерміновані (фіксований seed), тож повторний запуск дає ті самі файли.
+Для 10 яскравих шаблонів (lemon_sun … golden_noon) скрипт пише й template.json (див. CONFIGS).
 """
 from __future__ import annotations
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -282,9 +284,235 @@ def paper():
     save(grain(img, rng, 0.03), "paper")
 
 
-ALL = {f.__name__: f for f in [pink_glow, sunset, ocean, lavender, night_sky, forest, golden_bokeh, paper]}
+# ---------- яскраві «позитивні» фони (світлі, теплі, з сонцем і боке) ----------
+
+def petals(rng, n, size=(14, 38), blur=1.0) -> np.ndarray:
+    """Пелюстки: повернуті видовжені еліпси різної яскравості."""
+    def fn(d):
+        for _ in range(n):
+            cx, cy = rng.uniform(0, S), rng.uniform(0, S)
+            r = rng.uniform(*size)
+            a = rng.uniform(0, 2 * math.pi)
+            pts = []
+            for k in range(28):
+                t = 2 * math.pi * k / 28
+                px, py = r * math.cos(t), r * 0.55 * math.sin(t) * (1 + 0.25 * math.cos(t))
+                pts.append((cx + px * math.cos(a) - py * math.sin(a), cy + px * math.sin(a) + py * math.cos(a)))
+            d.polygon(pts, fill=int(rng.uniform(150, 255)))
+    return mask_layer(fn, blur)
+
+
+def lemon_sun():
+    rng = np.random.default_rng(111)
+    x, y = grid()
+    d = np.sqrt((x - 0.5) ** 2 + (y - 0.4) ** 2)
+    img = gradient(d * 1.3 + (noise(rng, 4, 3) - 0.5) * 0.1, [
+        (0.0, "#fcffd9"), (0.25, "#f4f784"), (0.6, "#e3f550"), (1.0, "#bfe03a")])
+    img = screen(img, rays(x, y, 0.5, 0.4, 30, (-math.pi, math.pi), rng, 0.55), "#ffffff", 0.45)
+    img = screen(img, radial(x, y, 0.5, 0.4, 0.35), "#ffffff", 0.6)
+    img = screen(img, bokeh(rng, 50, 15, 70, 10, alpha=(0.15, 0.4)), "#ffffff", 0.3)
+    img = screen(img, sparkles(rng, 45, (2, 5)), "#ffffff", 0.9)
+    save(grain(img, rng), "lemon_sun")
+
+
+def coral_sky():
+    rng = np.random.default_rng(222)
+    x, y = grid()
+    img = gradient(y * 0.85 + x * 0.15 + (noise(rng, 4, 3) - 0.5) * 0.12, [
+        (0.0, "#ffe3b8"), (0.4, "#ffaa94"), (0.75, "#ff7f9a"), (1.0, "#ff6f91")])
+    clouds = noise(rng, 6, 3)
+    img = screen(img, smoothstep(0.5, 0.85, clouds) * (1 - smoothstep(0.6, 1.0, y) * 0.5), "#fff3e0", 0.5)
+    img = screen(img, radial(x, y, 0.78, 0.22, 0.5), "#fff6d0", 0.7)
+    img = screen(img, rays(x, y, 0.78, 0.22, 18, (math.pi * 0.5, math.pi * 0.95), rng, 0.7), "#fff1c8", 0.4)
+    img = screen(img, bokeh(rng, 40, 15, 70, 10, alpha=(0.12, 0.35)), "#ffffff", 0.3)
+    img = screen(img, sparkles(rng, 40, (2, 5)), "#ffffff", 0.9)
+    save(grain(img, rng), "coral_sky")
+
+
+def turquoise_lagoon():
+    rng = np.random.default_rng(333)
+    x, y = grid()
+    img = gradient(y + (noise(rng, 4, 3) - 0.5) * 0.1, [
+        (0.0, "#d4fff3"), (0.35, "#5fe6d3"), (0.75, "#18b5c9"), (1.0, "#0e8fb3")])
+    img = screen(img, rays(x, y, 0.5, -0.1, 20, (math.pi * 0.3, math.pi * 0.7), rng, 0.8), "#ffffff", 0.5)
+    caust = noise(rng, 5, 7)
+    img = screen(img, smoothstep(0.55, 0.78, caust) * smoothstep(0.2, 0.9, y), "#e6fffb", 0.35)
+    img = screen(img, bokeh(rng, 70, 5, 28, 2, alpha=(0.2, 0.55)), "#ffffff", 0.4)
+    img = screen(img, sparkles(rng, 30, (1.5, 4)), "#ffffff", 0.8)
+    save(grain(img, rng), "turquoise_lagoon")
+
+
+def spring_green():
+    rng = np.random.default_rng(444)
+    x, y = grid()
+    img = gradient(y * 0.8 + (1 - x) * 0.2 + (noise(rng, 5, 3) - 0.5) * 0.2, [
+        (0.0, "#f6ffb0"), (0.45, "#a6ea6a"), (1.0, "#46c26c")])
+    img = screen(img, bokeh(rng, 100, 20, 80, 16, alpha=(0.2, 0.5)), "#e8ff8a", 0.45)
+    img = mix(img, "#2f9e55", bokeh(rng, 40, 25, 90, 18, alpha=(0.1, 0.3)) * 0.35)
+    img = screen(img, radial(x, y, 0.15, 0.05, 0.6), "#ffffe0", 0.8)
+    img = screen(img, rays(x, y, 0.12, -0.02, 16, (math.pi * 0.1, math.pi * 0.45), rng, 0.8), "#ffffe0", 0.5)
+    img = screen(img, sparkles(rng, 35, (1.5, 4)), "#ffffff", 0.8)
+    save(grain(img, rng), "spring_green")
+
+
+def honey_morning():
+    rng = np.random.default_rng(555)
+    x, y = grid()
+    img = gradient(x * 0.4 + y * 0.6 + (noise(rng, 4, 3) - 0.5) * 0.1, [
+        (0.0, "#fff3c0"), (0.35, "#ffd04d"), (0.75, "#f9a825"), (1.0, "#ee8412")])
+    img = screen(img, radial(x, y, 0.2, 0.15, 0.55), "#fffbe6", 0.8)
+    img = screen(img, ribbons(rng, 10, 0.1, (2, 8), 5, (0.3, 1.0), -0.4), "#fff6d0", 0.5)
+    img = screen(img, ribbons(rng, 5, 0.08, (20, 40), 25, (0.2, 0.9), -0.35), "#fff0b0", 0.35)
+    img = screen(img, bokeh(rng, 55, 12, 60, 8, alpha=(0.15, 0.4)), "#fff2b8", 0.35)
+    img = screen(img, sparkles(rng, 45, (2, 5)), "#ffffff", 0.9)
+    save(grain(img, rng), "honey_morning")
+
+
+def rainbow_bokeh():
+    rng = np.random.default_rng(666)
+    x, y = grid()
+    img = gradient(x * 0.5 + y * 0.5, [(0.0, "#fff6fc"), (0.5, "#fffbe9"), (1.0, "#eef9ff")])
+    for c in ["#ff7eb6", "#ffb84d", "#ffe45c", "#6be38a", "#4fd8ff", "#a98bff"]:
+        img = mix(img, c, bokeh(rng, 14, 30, 110, 12, alpha=(0.35, 0.8)) * 0.6)
+    img = screen(img, radial(x, y, 0.5, 0.5, 0.4), "#ffffff", 0.35)
+    img = screen(img, sparkles(rng, 40, (2, 5)), "#ffffff", 0.9)
+    save(grain(img, rng), "rainbow_bokeh")
+
+
+def orange_dawn():
+    rng = np.random.default_rng(777)
+    x, y = grid()
+    img = gradient(y + (noise(rng, 4, 3) - 0.5) * 0.05, [
+        (0.0, "#ffe27d"), (0.3, "#ffbb4a"), (0.62, "#ff8a5c"), (0.85, "#ff6b8a"), (1.0, "#ff5c9a")])
+    # сонце сходить біля нижнього краю: у горизонтальній листівці видно лише сяйво (не заважає підпису),
+    # у пості, квадраті й сторіс — і сам диск
+    img = screen(img, radial(x, y, 0.5, 0.86, 0.5), "#fff0b8", 0.8)
+    img = screen(img, mask_layer(lambda d: d.ellipse([S * 0.425, S * 0.785, S * 0.575, S * 0.935], fill=255), 5),
+                 "#fffbe0", 1.0)
+    img = screen(img, rays(x, y, 0.5, 0.86, 22, (-math.pi * 0.95, -math.pi * 0.05), rng, 0.7), "#fff2c0", 0.4)
+    band = smoothstep(0.05, 0.3, y) * (1 - smoothstep(0.45, 0.62, y))
+    img = mix(img, "#ffd0b0", smoothstep(0.55, 0.8, noise(rng, 6, 2)) * band * 0.4)
+    img = screen(img, sparkles(rng, 40, (2, 5)), "#ffffff", 0.85)
+    save(grain(img, rng), "orange_dawn")
+
+
+def cherry_blossom():
+    rng = np.random.default_rng(888)
+    x, y = grid()
+    img = gradient(y * 0.6 + x * 0.4 + (noise(rng, 4, 3) - 0.5) * 0.12, [
+        (0.0, "#ffe6f0"), (0.5, "#ffc9dd"), (1.0, "#ffeaf2")])
+    img = screen(img, radial(x, y, 0.5, 0.4, 0.6), "#ffffff", 0.5)
+    img = mix(img, "#ff8fb8", bokeh(rng, 40, 25, 90, 16, alpha=(0.1, 0.35)) * 0.5)
+    img = mix(img, "#ffffff", petals(rng, 120, (14, 40), 1.0) * 0.8)
+    img = mix(img, "#ff9fc3", petals(rng, 90, (12, 34), 1.0) * 0.7)
+    img = screen(img, sparkles(rng, 35, (1.5, 4)), "#ffffff", 0.8)
+    save(grain(img, rng), "cherry_blossom")
+
+
+def blue_sky():
+    rng = np.random.default_rng(999)
+    x, y = grid()
+    img = gradient(y + (noise(rng, 4, 3) - 0.5) * 0.04, [(0.0, "#3f9bff"), (0.55, "#86cdff"), (1.0, "#d6f0ff")])
+    img = screen(img, radial(x, y, 0.82, 0.12, 0.45), "#fff9d6", 0.8)
+    clouds = np.clip(smoothstep(0.52, 0.78, noise(rng, 6, 3)) * 0.9 + smoothstep(0.55, 0.8, noise(rng, 6, 4)) * 0.6, 0, 1)
+    shade = clouds * smoothstep(0.3, 0.9, noise(rng, 5, 3))
+    img = mix(img, "#ffffff", clouds * 0.92)
+    img = mix(img, "#b6d6f2", shade * 0.35)
+    img = screen(img, sparkles(rng, 20, (1.5, 4)), "#ffffff", 0.7)
+    save(grain(img, rng), "blue_sky")
+
+
+def golden_noon():
+    rng = np.random.default_rng(1010)
+    x, y = grid()
+    d = np.sqrt((x - 0.5) ** 2 + (y - 0.5) ** 2)
+    img = gradient(d * 1.5 + (noise(rng, 4, 3) - 0.5) * 0.08, [
+        (0.0, "#fffbe3"), (0.3, "#ffeaa0"), (0.65, "#ffd24a"), (1.0, "#f5a812")])
+    img = screen(img, rays(x, y, 0.5, 0.5, 34, (-math.pi, math.pi), rng, 0.6), "#ffffff", 0.3)
+    img = screen(img, bokeh(rng, 70, 20, 90, 12, alpha=(0.15, 0.4)), "#fff2b0", 0.4)
+    img = screen(img, sparkles(rng, 90, (2, 6)), "#ffffff", 0.95)
+    save(grain(img, rng), "golden_noon")
+
+
+ALL = {f.__name__: f for f in [pink_glow, sunset, ocean, lavender, night_sky, forest, golden_bokeh, paper,
+                               lemon_sun, coral_sky, turquoise_lagoon, spring_green, honey_morning,
+                               rainbow_bokeh, orange_dawn, cherry_blossom, blue_sky, golden_noon]}
+
+
+# ---------- конфіги шаблонів для яскравих фонів (старі 8 лежать у templates/ готовими) ----------
+
+def _style(font, color, glow, glow_r=0.28, glow_s=1.7, **kw):
+    return {"font": font, "color": color, "glow_color": glow, "glow_radius": glow_r, "glow_strength": glow_s, **kw}
+
+
+def _cfg(name, order, title, body, footer, focus=(0.5, 0.5)):
+    return {"name": name, "background": "background.jpg", "default_size": "landscape", "order": order,
+            "focus": list(focus), "title": title, "body": body, "footer": footer}
+
+
+CONFIGS = {
+    "lemon_sun": _cfg(
+        "Лимонне сонце", 9,
+        _style("Oswald-SemiBold", ["#7a3b00", "#b34700"], "#fffbd0", max_size=0.095),
+        _style("PTSerif-Bold", "#4a2a00", "#fffbd0", accent_color="#c2410c", max_size=0.07, line_spacing=1.12),
+        _style("Oswald-SemiBold", "#7a3b00", "#fffbd0", 0.3, 1.5)),
+    "coral_sky": _cfg(
+        "Кораловий ранок", 10,
+        _style("Lobster-Regular", ["#7a0f3a", "#4d0a26"], "#fff1e6", uppercase=False, max_size=0.115),
+        _style("Comfortaa-Bold", "#5a0f2e", "#fff1e6", accent_color="#1d5fa8", max_size=0.064, line_spacing=1.2),
+        _style("Comfortaa-Bold", "#5a0f2e", "#fff1e6", 0.3, 1.5)),
+    "turquoise_lagoon": _cfg(
+        "Бірюзова лагуна", 11,
+        _style("RobotoCondensed-Bold", "#05304a", "#e8fffb", max_size=0.093),
+        _style("PTSansNarrow-Bold", "#06324a", "#e8fffb", accent_color="#c2185b", max_size=0.078),
+        _style("RobotoCondensed-Bold", "#05304a", "#e8fffb", 0.3, 1.5)),
+    "spring_green": _cfg(
+        "Весняна зелень", 12,
+        _style("PlayfairDisplay-Bold", ["#0f4a22", "#08331a"], "#f7ffd0", max_size=0.085),
+        _style("PTSerif-Bold", "#0d3b1d", "#f7ffd0", accent_color="#d2411e", max_size=0.07, line_spacing=1.12),
+        _style("PTSerif-Bold", "#0d3b1d", "#f7ffd0", 0.3, 1.5)),
+    "honey_morning": _cfg(
+        "Медовий ранок", 13,
+        _style("MarckScript-Regular", "#4a2105", "#fff3c4", uppercase=False, max_size=0.125),
+        _style("PTSerif-Bold", "#4a2105", "#fff3c4", accent_color="#a3124f", max_size=0.07, line_spacing=1.12),
+        _style("PTSerif-Bold", "#4a2105", "#fff3c4", 0.3, 1.5)),
+    "rainbow_bokeh": _cfg(
+        "Райдужне боке", 14,
+        _style("Lobster-Regular", ["#6d28d9", "#be185d"], "#ffffff", uppercase=False, max_size=0.115),
+        _style("Comfortaa-Bold", "#3b1f6e", "#ffffff", accent_color="#d9480f", max_size=0.064, line_spacing=1.2),
+        _style("Comfortaa-Bold", "#3b1f6e", "#ffffff", 0.3, 1.5)),
+    "orange_dawn": _cfg(
+        "Помаранчевий світанок", 15,
+        _style("Oswald-SemiBold", "#4d0f2f", "#ffe9b8", max_size=0.095),
+        _style("PTSansNarrow-Bold", "#4d0f2f", "#ffe9b8", accent_color="#2b1b8a", max_size=0.078),
+        _style("Oswald-SemiBold", "#4d0f2f", "#ffe9b8", 0.3, 1.5)),
+    "cherry_blossom": _cfg(
+        "Квітуча вишня", 16,
+        _style("Lobster-Regular", ["#a3124f", "#6b0f3a"], "#ffffff", uppercase=False, max_size=0.115),
+        _style("PlayfairDisplay-Bold", "#5b0f33", "#ffffff", accent_color="#1f7a4d", max_size=0.066, line_spacing=1.18),
+        _style("PlayfairDisplay-Bold", "#5b0f33", "#ffffff", 0.3, 1.5)),
+    "blue_sky": _cfg(
+        "Блакитне небо", 17,
+        _style("RobotoCondensed-Bold", "#0b2a5b", "#ffffff", max_size=0.093),
+        _style("PTSerif-Bold", "#0b2a5b", "#ffffff", accent_color="#c2410c", max_size=0.07, line_spacing=1.12),
+        _style("RobotoCondensed-Bold", "#0b2a5b", "#ffffff", 0.3, 1.5)),
+    "golden_noon": _cfg(
+        "Золотий полудень", 18,
+        _style("PlayfairDisplay-Bold", ["#5a2d00", "#3d1d00"], "#fff7d6", max_size=0.085),
+        _style("PlayfairDisplay-Bold", "#4a2a00", "#fff7d6", accent_color="#a3124f", max_size=0.068, line_spacing=1.18),
+        _style("PlayfairDisplay-Bold", "#4a2a00", "#fff7d6", 0.3, 1.5)),
+}
+
+
+def write_config(tid: str) -> None:
+    out = ROOT / tid / "template.json"
+    out.write_text(json.dumps(CONFIGS[tid], ensure_ascii=False, indent=2) + "\n", "utf-8")
+    print("ok", out)
+
 
 if __name__ == "__main__":
     names = sys.argv[1:] or list(ALL)
     for nm in names:
         ALL[nm]()
+        if nm in CONFIGS:   # конфіги старих 8 шаблонів не чіпаємо
+            write_config(nm)

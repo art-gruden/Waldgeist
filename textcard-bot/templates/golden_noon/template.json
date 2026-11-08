@@ -1,0 +1,38 @@
+{
+  "name": "Золотий полудень",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 18,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "title": {
+    "font": "PlayfairDisplay-Bold",
+    "color": [
+      "#5a2d00",
+      "#3d1d00"
+    ],
+    "glow_color": "#fff7d6",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "max_size": 0.085
+  },
+  "body": {
+    "font": "PlayfairDisplay-Bold",
+    "color": "#4a2a00",
+    "glow_color": "#fff7d6",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "accent_color": "#a3124f",
+    "max_size": 0.068,
+    "line_spacing": 1.18
+  },
+  "footer": {
+    "font": "PlayfairDisplay-Bold",
+    "color": "#4a2a00",
+    "glow_color": "#fff7d6",
+    "glow_radius": 0.3,
+    "glow_strength": 1.5
+  }
+}

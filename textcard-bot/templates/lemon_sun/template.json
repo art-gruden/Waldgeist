@@ -1,0 +1,38 @@
+{
+  "name": "Лимонне сонце",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 9,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "title": {
+    "font": "Oswald-SemiBold",
+    "color": [
+      "#7a3b00",
+      "#b34700"
+    ],
+    "glow_color": "#fffbd0",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "max_size": 0.095
+  },
+  "body": {
+    "font": "PTSerif-Bold",
+    "color": "#4a2a00",
+    "glow_color": "#fffbd0",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "accent_color": "#c2410c",
+    "max_size": 0.07,
+    "line_spacing": 1.12
+  },
+  "footer": {
+    "font": "Oswald-SemiBold",
+    "color": "#7a3b00",
+    "glow_color": "#fffbd0",
+    "glow_radius": 0.3,
+    "glow_strength": 1.5
+  }
+}

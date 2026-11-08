@@ -72,7 +72,11 @@ class Rendering(unittest.TestCase):
     def test_all_templates_all_sizes(self):
         store = TemplateStore(Path(TMP))
         ts = store.all()
-        self.assertGreaterEqual(len(ts), 8)
+        self.assertEqual(len(ts), 18)
+        ids = {t.id for t in ts}
+        for tid in ("lemon_sun", "coral_sky", "turquoise_lagoon", "spring_green", "honey_morning", "rainbow_bokeh",
+                    "orange_dawn", "cherry_blossom", "blue_sky", "golden_noon"):
+            self.assertIn(tid, ids)
         for t in ts:
             for size, (w, h) in R.SIZES.items():
                 for text in (TEXT, TEXT20, "Світло"):

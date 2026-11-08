@@ -1,0 +1,38 @@
+{
+  "name": "Весняна зелень",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 12,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "title": {
+    "font": "PlayfairDisplay-Bold",
+    "color": [
+      "#0f4a22",
+      "#08331a"
+    ],
+    "glow_color": "#f7ffd0",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "max_size": 0.085
+  },
+  "body": {
+    "font": "PTSerif-Bold",
+    "color": "#0d3b1d",
+    "glow_color": "#f7ffd0",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "accent_color": "#d2411e",
+    "max_size": 0.07,
+    "line_spacing": 1.12
+  },
+  "footer": {
+    "font": "PTSerif-Bold",
+    "color": "#0d3b1d",
+    "glow_color": "#f7ffd0",
+    "glow_radius": 0.3,
+    "glow_strength": 1.5
+  }
+}

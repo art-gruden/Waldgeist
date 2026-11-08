@@ -1,0 +1,39 @@
+{
+  "name": "Райдужне боке",
+  "background": "background.jpg",
+  "default_size": "landscape",
+  "order": 14,
+  "focus": [
+    0.5,
+    0.5
+  ],
+  "title": {
+    "font": "Lobster-Regular",
+    "color": [
+      "#6d28d9",
+      "#be185d"
+    ],
+    "glow_color": "#ffffff",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "uppercase": false,
+    "max_size": 0.115
+  },
+  "body": {
+    "font": "Comfortaa-Bold",
+    "color": "#3b1f6e",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.28,
+    "glow_strength": 1.7,
+    "accent_color": "#d9480f",
+    "max_size": 0.064,
+    "line_spacing": 1.2
+  },
+  "footer": {
+    "font": "Comfortaa-Bold",
+    "color": "#3b1f6e",
+    "glow_color": "#ffffff",
+    "glow_radius": 0.3,
+    "glow_strength": 1.5
+  }
+}

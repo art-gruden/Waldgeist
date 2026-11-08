@@ -142,6 +142,191 @@ def jpeg(w, h, color=(20, 60, 110)):
     return b.getvalue()
 
 
+CH, CH2, CH3, CH4, GR = -1001111111111, -1002222222222, -1003333333333, -1004444444444, -1005555555555
+
+
+def answers(calls):
+    return [c for c in calls if c["method"] == "answerCallbackQuery"]
+
+
+def to_chat(calls, cid, method="sendPhoto"):
+    return [c for c in calls if c["method"] == method and int(c["params"]["chat_id"]) == cid]
+
+
+def alert(calls):
+    a = answers(calls)[-1]["params"]
+    return a.get("text", ""), a.get("show_alert") in (True, "true", "True")
+
+
+async def wait_file(cb, uid, c, timeout=5.0):
+    """Бот записує file_id картинки одразу після відправки — чекаємо запис."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        r = cb.db.get_render(uid, c["result"]["message_id"])
+        if r and r["file_id"]:
+            return r
+        await asyncio.sleep(0.02)
+    return None
+
+
+async def scenario_channel(cb, card_call, bm):
+    fake.add_channel(CH, "Мій канал", "my_channel", admins={A})
+    fake.add_channel(CH2, "Чужий канал", "foreign", bot="left", admins={A})
+    fake.add_channel(CH3, "Канал без мене", "", admins=set())
+    fake.add_channel(CH4, "Канал без прав", "noperm", bot_post=False, admins={A})
+    fake.add_channel(GR, "Моя група", "my_group", ctype="supergroup", admins={A})
+    card = card_call["result"]
+
+    print("18. Канал не підключено: кнопки є, публікувати не можна")
+    mn = await menu(A)
+    check("не підключено" in mn["text"], "меню: канал не підключено")
+    check("Опублікувати" in str(buttons(card)), "кнопка «Опублікувати» під листівкою")
+    check("Опублікувати останню" in str(buttons(mn)), "кнопка «Опублікувати останню» в меню")
+    calls = await press(A, card, "r:pub")
+    text, shown = alert(calls)
+    check(shown and "підключіть" in text and not to_chat(calls, CH), "без каналу — підказка, нічого не надіслано")
+    calls = await press(A, mn, "p:last")
+    check("підключіть" in alert(calls)[0], "те саме з меню")
+
+    print("19. Підключення каналу: помилки й успіх")
+    m = fake.mark()
+    fake.send_text(A, "/channel")
+    chm = current(await wait(m, is_("sendMessage", A, "Публікація в канал"), label="екран каналу"))
+    await press(A, chm, btn(chm, "Підключити"))
+    check(cb.db.state(A)[0] == "chan_connect", "чекаємо канал")
+
+    async def say(text=None, fwd=None, user_fwd=False, expect=""):
+        m = fake.mark()
+        if fwd:
+            fake.forward_from_channel(A, fwd)
+        elif user_fwd:
+            fake.forward_from_user(A)
+        else:
+            fake.send_text(A, text)
+        await wait(m, is_("sendMessage", A, expect), label=expect)
+
+    await say("щось не те", expect="Надішліть @username")
+    await say(user_fwd=True, expect="не з каналу")
+    await say(fwd=CH2, expect="не є адміністратором")
+    await say("@nonexistent_channel", expect="Не знаходжу")
+    await say(fwd=CH4, expect="немає права")
+    await say(fwd=CH3, expect="Ви не адміністратор")
+    check(cb.channel(A) is None and cb.db.state(A)[0] == "chan_connect", "після помилок канал не підключено, стан лишився")
+    await say("@my_channel", expect="Підключено")
+    check(cb.channel(A) and cb.channel(A)["id"] == CH and cb.db.state(A)[0] is None, "канал підключено за @username")
+
+    print("20. Публікація кнопкою під листівкою")
+    calls = await press(A, card, "r:pub")
+    posts = to_chat(calls, CH)
+    check(len(posts) == 1, "листівку надіслано в канал")
+    check(posts and fake.files[posts[0]["params"]["photo"]] == card_call["files"]["photo"][1], "в канал пішла саме ця картинка")
+    check(posts and not posts[0]["params"].get("caption"), "без підпису")
+    check(any("Опубліковано" in c["params"].get("text", "") and "https://t.me/my_channel/" in c["params"]["text"]
+              for c in calls if c["method"] == "sendMessage"), "користувач отримав посилання на пост")
+    check(cb.db.get_render(A, card["message_id"])["published_to"] == CH, "листівку позначено опублікованою в цьому каналі")
+    calls = await press(A, card, "r:pub")
+    ask = [c for c in calls if is_("sendMessage", A, "ще раз")(c)]
+    check(ask and not to_chat(calls, CH), "повторно: запитання «ще раз?», без нової публікації")
+    calls = await press(A, current(ask[0]), btn(current(ask[0]), "Так"))
+    check(len(to_chat(calls, CH)) == 1 and any(c["method"] == "deleteMessage" for c in calls),
+          "після підтвердження: друга публікація, запитання прибрано")
+
+    print("21. Меню → «Опублікувати останню»")
+    c = await text_card(A, "Нова листівка для каналу, щоб перевірити публікацію з меню.")
+    check(await wait_file(cb, A, c) is not None, "file_id збережено")
+    mn = await menu(A)
+    check("Мій канал" in mn["text"], "меню показує канал")
+    calls = await press(A, mn, btn(mn, "Опублікувати останню"))
+    posts = to_chat(calls, CH)
+    check(len(posts) == 1 and fake.files[posts[0]["params"]["photo"]] == c["files"]["photo"][1],
+          "опубліковано саме останню листівку")
+
+    print("22. Листівка-файл публікується файлом")
+    m = fake.mark()
+    fake.press(A, c["result"], "r:file")
+    d = await wait(m, is_("sendDocument", A))
+    check(await wait_file(cb, A, d) is not None and cb.db.get_render(A, d["result"]["message_id"])["kind"] == "document",
+          "для файлу збережено file_id і тип")
+    calls = await press(A, d["result"], "r:pub")
+    check(len(to_chat(calls, CH, "sendDocument")) == 1, "в канал пішов документ")
+
+    print("23. Права змінилися: адмінство знято / бота видалено з каналу")
+    # свіжа листівка: остання вже опублікована, і «Опублікувати останню» запитало б «ще раз?» замість перевірки прав
+    c = await text_card(A, "Листівка для перевірки прав після змін у каналі.")
+    await wait_file(cb, A, c)
+    fake.channels[CH]["admins"].discard(A)
+    calls = await press(A, mn, "p:last")
+    check("більше не адміністратор" in alert(calls)[0] and not to_chat(calls, CH), "не адмін → відмова")
+    fake.channels[CH]["admins"].add(A)
+    fake.channels[CH]["bot"] = "left"
+    calls = await press(A, mn, "p:last")
+    check("не має доступу" in alert(calls)[0] and not to_chat(calls, CH), "бота видалено → зрозуміла відмова")
+    fake.channels[CH]["bot"] = "administrator"
+    calls = await press(A, mn, "p:last")
+    check(len(to_chat(calls, CH)) == 1, "права повернулись → знову працює")
+
+    print("24. Інший користувач не публікує у чужий канал")
+    c = await text_card(B)
+    await wait_file(cb, B, c)
+    calls = await press(B, c["result"], "r:pub")
+    check("підключіть" in alert(calls)[0] and not to_chat(calls, CH), "B без каналу не публікує")
+    m = fake.mark()
+    fake.send_text(B, "/channel")
+    bch = current(await wait(m, is_("sendMessage", B, "Публікація в канал"), label="екран каналу B"))
+    await press(B, bch, "i:chan_connect")
+    m = fake.mark()
+    fake.forward_from_channel(B, CH)
+    await wait(m, is_("sendMessage", B, "Ви не адміністратор"), label="B не адмін каналу")
+    check(cb.channel(B) is None and cb.channel(A)["id"] == CH, "B не підключив чужий канал, канал A не зачеплено")
+    fake.send_text(B, "/cancel")
+
+    print("25. Група за числовим ID, відключення, підключення пересланим постом з картинкою")
+    await press(A, chm, "i:chan_connect")
+    m = fake.mark()
+    fake.send_text(A, str(GR))
+    await wait(m, is_("sendMessage", A, "Підключено"), label="група")
+    check(cb.channel(A)["id"] == GR and cb.channel(A)["type"] == "supergroup", "група підключена за ID")
+    m = fake.mark()
+    fake.send_text(A, "/channel")
+    gm = current(await wait(m, is_("sendMessage", A, "Підключено (група)"), label="екран групи"))
+    calls = await press(A, card, "r:pub")
+    check(len(to_chat(calls, GR)) == 1 and not any("ще раз" in c["params"].get("text", "") for c in calls
+                                                   if c["method"] == "sendMessage"),
+          "листівка, раніше опублікована в канал, іде в нову групу без запитання")
+    calls = await press(A, card, "r:pub")
+    check(len(to_chat(calls, GR)) == 0 and any("ще раз" in c["params"].get("text", "") and "Моя група" in c["params"]["text"]
+                                               for c in calls if c["method"] == "sendMessage"),
+          "повторно в ту саму групу — запитання з її назвою")
+    await press(A, gm, "c:off")
+    check(cb.channel(A) is None, "відключено")
+    await press(A, gm, "i:chan_connect")
+    m = fake.mark()
+    fake.forward_from_channel(A, CH, photo=True)
+    await wait(m, is_("sendMessage", A, "Підключено"), label="підключення пересланим фото")
+    check(cb.channel(A)["id"] == CH, "канал підключено пересланим постом із картинкою")
+
+    print("26. Міграція старої бази (без колонок публікації)")
+    import sqlite3
+    from bot.db import DB
+    old = DATA / "old.sqlite3"
+    con = sqlite3.connect(old)
+    con.executescript("CREATE TABLE renders (chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, user_id INTEGER NOT NULL, "
+                      "text TEXT NOT NULL, title TEXT, created REAL NOT NULL, PRIMARY KEY (chat_id, message_id));"
+                      "INSERT INTO renders VALUES (1, 2, 3, 'старий текст', NULL, 1.0);")
+    con.commit()
+    con.close()
+    db = DB(old)
+    cols = {r["name"] for r in db.conn.execute("PRAGMA table_info(renders)")}
+    check({"file_id", "kind", "published_to"} <= cols, "колонки додано")
+    r = db.get_render(1, 2)
+    check(r["text"] == "старий текст" and r["file_id"] is None and r["published_to"] == 0, "старі дані на місці")
+    db.add_render(1, 3, 5, "новий", None)
+    db.set_render_file(1, 3, "photo", "F1")
+    check(db.last_publishable(5)["file_id"] == "F1" and db.last_publishable(3) is None, "нові запити працюють")
+    DB(old)   # повторне відкриття не ламається
+    check(True, "повторне відкриття без помилок")
+
+
 async def scenario(app, cb):
     print("1. /start: перший користувач стає адміном, показується меню")
     m = fake.mark()
@@ -161,6 +346,7 @@ async def scenario(app, cb):
     rec = await rec_of(cb, A, c)
     check(rec and rec["text"] == TEXT and rec["title"] is None, "текст листівки збережено")
     card = c["result"]
+    card_call = c
 
     print("3. Меню → Розмір → Квадрат")
     mn = await menu(A)
@@ -276,7 +462,15 @@ async def scenario(app, cb):
     m = fake.mark()
     fake.press(A, mn, "ex:0")
     c = await wait(m, is_("sendMediaGroup", A), timeout=30)
-    check(len(c["params"]["media"]) == 8, f"альбом із {len(c['params']['media'])} прикладів")
+    check(len(c["params"]["media"]) == 10, f"альбом із {len(c['params']['media'])} прикладів на 1-й сторінці")
+    m = fake.mark()
+    fake.press(A, mn, "ex:1")
+    c = await wait(m, is_("sendMediaGroup", A), timeout=30)
+    check(len(c["params"]["media"]) == len(cb.store.all()) - 10, f"2-га сторінка: {len(c['params']['media'])} прикладів")
+    names = {t.config["name"] for t in cb.store.all()}
+    check({"Лимонне сонце", "Кораловий ранок", "Бірюзова лагуна", "Весняна зелень", "Медовий ранок", "Райдужне боке",
+           "Помаранчевий світанок", "Квітуча вишня", "Блакитне небо", "Золотий полудень"} <= names
+          and len(cb.store.all()) == 18, "10 нових яскравих шаблонів серед 18")
 
     print("10. Помилки тексту")
     m = fake.mark()
@@ -442,9 +636,12 @@ async def scenario(app, cb):
     await wait(m, is_("deleteMessage", A))
     check(True, "меню закрито")
 
-    print("18. Налаштування переживають перезапуск")
+    await scenario_channel(cb, card_call, bm)
+
+    print("27. Налаштування й канал переживають перезапуск")
     cb2 = M.CardBot(DATA)
     check(cb2.st(A) == cb.st(A) and cb2.is_admin(A) and cb2.add_mode() == "all", "SQLite зберіг усе")
+    check(cb2.channel(A) == cb.channel(A) and cb2.channel(A)["id"] == CH, "підключений канал збережено")
 
 
 async def amain():

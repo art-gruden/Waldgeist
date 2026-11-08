@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS renders (
     text       TEXT    NOT NULL,
     title      TEXT,             -- NULL: з налаштувань; '' — без заголовка; інакше разовий заголовок
     created    REAL    NOT NULL,
+    file_id    TEXT,             -- file_id картинки в Telegram (лише для повідомлення з кнопками картки): для публікації в канал
+    kind       TEXT,             -- 'photo' | 'document'
+    published_to INTEGER NOT NULL DEFAULT 0, -- id каналу, куди листівку опубліковано востаннє (0 — ще ні)
     PRIMARY KEY (chat_id, message_id)
 );
 CREATE INDEX IF NOT EXISTS renders_user ON renders(user_id, created);
@@ -48,6 +51,14 @@ class DB:
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA busy_timeout=5000")
             self.conn.executescript(SCHEMA)
+            self._migrate()
+
+    def _migrate(self) -> None:
+        """Старі бази (без колонок публікації) доповнюються на місці — дані користувачів зберігаються."""
+        have = {r["name"] for r in self.conn.execute("PRAGMA table_info(renders)")}
+        for col, ddl in (("file_id", "TEXT"), ("kind", "TEXT"), ("published_to", "INTEGER NOT NULL DEFAULT 0")):
+            if col not in have:
+                self.conn.execute(f"ALTER TABLE renders ADD COLUMN {col} {ddl}")
 
     def _x(self, sql: str, args=()) -> sqlite3.Cursor:
         with self.lock:
@@ -61,6 +72,9 @@ class DB:
     def kv_set(self, key: str, value: Any) -> None:
         self._x("INSERT INTO kv(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (key, json.dumps(value, ensure_ascii=False)))
+
+    def kv_del(self, key: str) -> None:
+        self._x("DELETE FROM kv WHERE key=?", (key,))
 
     # ---------- users
     def touch_user(self, uid: int, name: str, username: str) -> sqlite3.Row:
@@ -108,7 +122,8 @@ class DB:
     # ---------- renders
     def add_render(self, chat_id: int, message_id: int, user_id: int, text: str, title: str | None) -> None:
         with self.lock:
-            self._x("INSERT OR REPLACE INTO renders VALUES(?, ?, ?, ?, ?, ?)",
+            self._x("INSERT OR REPLACE INTO renders(chat_id, message_id, user_id, text, title, created) "
+                    "VALUES(?, ?, ?, ?, ?, ?)",
                     (chat_id, message_id, user_id, text, title, time.time()))
             self._x("DELETE FROM renders WHERE user_id=? AND rowid NOT IN "
                     "(SELECT rowid FROM renders WHERE user_id=? ORDER BY created DESC LIMIT ?)",
@@ -119,3 +134,16 @@ class DB:
 
     def last_render(self, user_id: int) -> sqlite3.Row | None:
         return self._x("SELECT * FROM renders WHERE user_id=? ORDER BY created DESC LIMIT 1", (user_id,)).fetchone()
+
+    # ---------- публікація в канал
+    def set_render_file(self, chat_id: int, message_id: int, kind: str, file_id: str) -> None:
+        self._x("UPDATE renders SET kind=?, file_id=? WHERE chat_id=? AND message_id=?",
+                (kind, file_id, chat_id, message_id))
+
+    def last_publishable(self, user_id: int) -> sqlite3.Row | None:
+        """Остання листівка користувача, яку можна опублікувати (є file_id)."""
+        return self._x("SELECT * FROM renders WHERE user_id=? AND file_id IS NOT NULL "
+                       "ORDER BY created DESC, rowid DESC LIMIT 1", (user_id,)).fetchone()
+
+    def mark_published(self, chat_id: int, message_id: int, channel_id: int) -> None:
+        self._x("UPDATE renders SET published_to=? WHERE chat_id=? AND message_id=?", (channel_id, chat_id, message_id))
